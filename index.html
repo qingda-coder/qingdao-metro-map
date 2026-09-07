@@ -532,18 +532,26 @@ const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const state = { lat: QD_CENTER.lat, lon: QD_CENTER.lon, zoom: QD_CENTER.zoom };
 const lineVisible = {};
 METRO.lines.forEach(l => lineVisible[l.ref] = true);
-/* ---------- 多图钉图层 ---------- */
+/* ---------- 图钉（合并为单一图层） ---------- */
 const MYPINS_KEY = 'qd_metro_mypins_v1';
 let MYPINS = [];
 try { MYPINS = JSON.parse(localStorage.getItem(MYPINS_KEY) || '[]'); } catch (e) { MYPINS = []; }
 if (!Array.isArray(MYPINS)) MYPINS = [];
-const pinLayers = [
-  { id: 'custom', name: '自定义标注', color: '#e8452c', data: CUSTOM, removable: false },
-  { id: 'badminton', name: '青岛羽毛球馆', color: '#1f8f4b', data: BADMINTON, removable: false },
-  { id: 'mypins', name: '我的图钉', color: '#1a5fb4', data: MYPINS, removable: true },
-];
-const layerVisible = {};
-pinLayers.forEach(L => { layerVisible[L.id] = true; });
+/* 三个来源合并为单一图层，统一坐标管线：在线版 CUSTOM/BADMINTON 已由 alignToGCJ 转为 GCJ-02，
+   MYPINS 为用户点底图产生的 GCJ-02；离线版三者均为 WGS-84（与天地图底图一致）。
+   合并后不再做任何坐标转换，彻底消除拖拽/放置错位。 */
+let ALL_PINS = [];
+function rebuildAllPins() {
+  ALL_PINS = [
+    ...CUSTOM.map(m => ({ ...m, color: '#e8452c', group: '美食' })),
+    ...BADMINTON.map(m => ({ ...m, color: '#1f8f4b', group: '羽毛球' })),
+    ...MYPINS.map(m => ({ ...m, color: '#1a5fb4', group: '我的' })),
+  ];
+  ALL_PINS.forEach((m, i) => { m.n = i + 1; });
+}
+rebuildAllPins();
+const pinLayer = { id: 'all', name: '全部图钉', color: '#e8452c', data: ALL_PINS };
+const layerVisible = { all: true };
 let addingMode = false;
 
 /* ---------- derived station index ---------- */
@@ -619,12 +627,12 @@ document.getElementById('stat-pois').textContent = POIS.length;
 
 const pinLayerEls = {};
 const pinEls = {};
-function makePinEl(L, m) {
+function makePinEl(m) {
   const el = document.createElementNS(NS, 'g');
   el.classList.add('cmarker');
   const pin = document.createElementNS(NS, 'path');
   pin.setAttribute('d', 'M0,-15 C -8.5,-15 -12.5,-9 -12.5,-3.6 C -12.5,3.4 -2.5,11.5 0,14 C 2.5,11.5 12.5,3.4 12.5,-3.6 C 12.5,-9 8.5,-15 0,-15 Z');
-  pin.setAttribute('fill', L.color);
+  pin.setAttribute('fill', m.color);
   pin.setAttribute('stroke', '#ffffff');
   pin.setAttribute('stroke-width', '1.6');
   el.appendChild(pin);
@@ -637,73 +645,70 @@ function makePinEl(L, m) {
   num.setAttribute('fill', '#ffffff');
   num.textContent = m.n;
   el.appendChild(num);
-  el.addEventListener('click', e => { e.stopPropagation(); showPinPopup(m, L, el); });
+  el.addEventListener('click', e => { e.stopPropagation(); showPinPopup(m, el); });
   el.addEventListener('mouseenter', () => { el.style.filter = 'brightness(1.15)'; });
   el.addEventListener('mouseleave', () => { el.style.filter = ''; });
   return el;
 }
-function buildPinLayer(L) {
+function buildAllPins() {
   const g = document.createElementNS(NS, 'g');
-  g.setAttribute('id', 'layer-' + L.id);
+  g.setAttribute('id', 'layer-all');
   overlayEl.appendChild(g);
-  pinLayerEls[L.id] = g;
-  pinEls[L.id] = [];
-  L.data.forEach(m => {
-    const el = makePinEl(L, m);
+  pinLayerEls['all'] = g;
+  pinEls['all'] = [];
+  ALL_PINS.forEach(m => {
+    const el = makePinEl(m);
     g.appendChild(el);
-    pinEls[L.id].push({ el, m });
+    pinEls['all'].push({ el, m });
   });
 }
-function rebuildPinLayer(L) {
-  const old = pinLayerEls[L.id];
+function rebuildAllPinsLayer() {
+  const old = pinLayerEls['all'];
   if (old) old.remove();
-  delete pinLayerEls[L.id];
-  delete pinEls[L.id];
-  buildPinLayer(L);
+  delete pinLayerEls['all'];
+  delete pinEls['all'];
+  buildAllPins();
 }
-function renderPinLayers() {
+function renderAllPins() {
   const [cx, cy] = lonLatToWorld(state.lon, state.lat, state.zoom);
   const W = mapEl.clientWidth, H = mapEl.clientHeight;
   const toXY = (lon, lat) => {
     const [wx, wy] = lonLatToWorld(lon, lat, state.zoom);
     return [wx - cx + W / 2, wy - cy + H / 2];
   };
-  pinLayers.forEach(L => {
-    const show = layerVisible[L.id];
-    (pinEls[L.id] || []).forEach(c => {
-      const [sx, sy] = toXY(c.m.lon, c.m.lat);
-      c.el.setAttribute('transform', 'translate(' + sx.toFixed(1) + ' ' + sy.toFixed(1) + ')');
-      c.el.style.display = show ? '' : 'none';
-    });
+  const show = layerVisible['all'];
+  (pinEls['all'] || []).forEach(c => {
+    const [sx, sy] = toXY(c.m.lon, c.m.lat);
+    c.el.setAttribute('transform', 'translate(' + sx.toFixed(1) + ' ' + sy.toFixed(1) + ')');
+    c.el.style.display = show ? '' : 'none';
   });
 }
-function showPinPopup(m, L) {
+function showPinPopup(m) {
   const lines = ['<div class="p-addr">' + esc(m.addr) + '</div>'];
   if (m.remark && m.remark !== '无备注' && m.remark.trim() !== '') {
     lines.push('<div class="p-remark">' + esc(m.remark) + '</div>');
   }
   if (m.note) lines.push('<div class="p-xy-note">' + esc(m.note) + '</div>');
   lines.push('<div class="p-xy">#' + m.n + ' · ' + m.lat.toFixed(5) + ', ' + m.lon.toFixed(5) + '</div>');
-  if (L.removable) {
+  if (m.group === '我的') {
     lines.push('<div class="p-del" id="pin-del">删除这个图钉</div>');
   }
   showPopupAt(m.lon, m.lat, '#' + m.n + ' ' + m.name, lines.join(''));
-  if (L.removable) {
+  if (m.group === '我的') {
     const delBtn = document.getElementById('pin-del');
     if (delBtn) delBtn.addEventListener('click', ev => {
       ev.stopPropagation();
-      const idx = L.data.indexOf(m);
-      if (idx >= 0) L.data.splice(idx, 1);
-      renumberLayer(L);
+      const hit = MYPINS.find(x => x.name === m.name && x.lat === m.lat && x.lon === m.lon);
+      const idx = hit ? MYPINS.indexOf(hit) : -1;
+      if (idx >= 0) MYPINS.splice(idx, 1);
       saveMYPINS();
-      rebuildPinLayer(L);
+      rebuildAllPins();
+      rebuildAllPinsLayer();
+      renderAllPins();
       hidePopup();
       refreshPinRows();
     });
   }
-}
-function renumberLayer(L) {
-  L.data.forEach((m, i) => { m.n = i + 1; });
 }
 function saveMYPINS() {
   try { localStorage.setItem(MYPINS_KEY, JSON.stringify(MYPINS)); } catch (e) {}
@@ -713,24 +718,22 @@ function refreshPinRows() {
   const wrap = document.getElementById('pin-layers');
   if (!wrap) return;
   wrap.innerHTML = '';
-  pinLayers.forEach(L => {
-    const row = document.createElement('div');
-    row.className = 'layer-row' + (layerVisible[L.id] ? '' : ' off');
-    row.setAttribute('data-layer', L.id);
-    const sw = document.createElement('span');
-    sw.className = 'sw'; sw.style.background = L.color;
-    const nm = document.createElement('span');
-    nm.className = 'lname'; nm.textContent = L.name;
-    const cnt = document.createElement('span');
-    cnt.className = 'lcnt'; cnt.textContent = L.data.length + ' 个位置';
-    row.appendChild(sw); row.appendChild(nm); row.appendChild(cnt);
-    row.addEventListener('click', () => {
-      layerVisible[L.id] = !layerVisible[L.id];
-      row.classList.toggle('off', !layerVisible[L.id]);
-      renderPinLayers();
-    });
-    wrap.appendChild(row);
+  const row = document.createElement('div');
+  row.className = 'layer-row' + (layerVisible['all'] ? '' : ' off');
+  row.setAttribute('data-layer', 'all');
+  const sw = document.createElement('span');
+  sw.className = 'sw'; sw.style.background = '#e8452c';
+  const nm = document.createElement('span');
+  nm.className = 'lname'; nm.textContent = '全部图钉';
+  const cnt = document.createElement('span');
+  cnt.className = 'lcnt'; cnt.textContent = ALL_PINS.length + ' 个位置';
+  row.appendChild(sw); row.appendChild(nm); row.appendChild(cnt);
+  row.addEventListener('click', () => {
+    layerVisible['all'] = !layerVisible['all'];
+    row.classList.toggle('off', !layerVisible['all']);
+    renderAllPins();
   });
+  wrap.appendChild(row);
 }
 /* ---------- add pin (我的图钉) ---------- */
 const btnAddPin = document.getElementById('btn-add-pin');
@@ -762,12 +765,11 @@ function closePinModal() {
     const remark = document.getElementById('pm-remark').value.trim();
     if (!name) { toast('请填写图钉名称'); return; }
     if (!addPinPos) { closePinModal(); return; }
-    const myp = pinLayers.find(L => L.id === 'mypins');
-    myp.data.push({ n: 0, name: name, addr: addPinPos.addr, remark: remark || '无备注', lat: addPinPos.lat, lon: addPinPos.lon, note: '手动添加' });
-    renumberLayer(myp);
+    MYPINS.push({ name: name, addr: addPinPos.addr, remark: remark || '无备注', lat: addPinPos.lat, lon: addPinPos.lon, note: '手动添加' });
     saveMYPINS();
-    rebuildPinLayer(myp);
-    renderPinLayers();
+    rebuildAllPins();
+    rebuildAllPinsLayer();
+    renderAllPins();
     refreshPinRows();
     closePinModal();
     setAddingMode(false);
@@ -900,7 +902,7 @@ function buildOverlay() {
     g.appendChild(el);
     stationEls.push({ el, name: s.n, lines: s.lines, lat: s.lat, lon: s.lon, transfer });
   });
-  pinLayers.forEach(L => buildPinLayer(L));
+  buildAllPins();
   // 点击放在 mapEl 上：pointerdown 的 setPointerCapture 会把 click 目标重定向到 mapEl，
   // 若监听 overlayEl（mapEl 子元素）会导致新建图钉点击无反馈；moved 保护用于忽略拖拽后的 click。
   mapEl.addEventListener('click', e => {
@@ -1046,7 +1048,7 @@ function render() {
     }
     renderTiles();
     renderOverlay();
-    renderPinLayers();
+    renderAllPins();
     positionTempMarker();
   });
 }
@@ -1161,13 +1163,10 @@ function localSearch(q) {
 function layerSearch(q) {
   const nq = normalize(q);
   const out = [];
-  for (const L of pinLayers) {
-    if (!L.data.length) continue;
-    for (const m of L.data) {
-      if (normalize(m.name).includes(nq)) {
-        out.push({ layer: L, m: m });
-        if (out.length >= 12) return out;
-      }
+  for (const m of ALL_PINS) {
+    if (normalize(m.name).includes(nq)) {
+      out.push({ m: m });
+      if (out.length >= 12) return out;
     }
   }
   return out;
@@ -1210,8 +1209,8 @@ function renderSuggest() {
   if (pins.length) {
     html.push('<div class="s-group">我的标注 / 图钉</div>');
     pins.forEach(it => {
-      html.push('<div class="s-item" data-kind="pin" data-layer="' + it.layer.id + '" data-idx="' + it.layer.data.indexOf(it.m) + '">' +
-        '<span class="s-name">' + hl(it.m.name, q) + '</span>' + '<span class="tag-pill">' + esc(it.layer.name) + ' #' + it.m.n + '</span></div>');
+      html.push('<div class="s-item" data-kind="pin" data-idx="' + ALL_PINS.indexOf(it.m) + '">' +
+        '<span class="s-name">' + hl(it.m.name, q) + '</span>' + '<span class="tag-pill">' + esc(it.m.group) + ' #' + it.m.n + '</span></div>');
     });
   }
   if (!local.length && !pois.length && !pins.length) {
@@ -1258,16 +1257,14 @@ function chooseItem(item) {
       showPoiPopup(lat, lon, nm, cat);
     });
   } else if (kind === 'pin') {
-    const lid = item.dataset.layer;
-    const L = pinLayers.find(x => x.id === lid);
-    if (!L) return;
-    const m = L.data[parseInt(item.dataset.idx, 10)];
+    const idx = parseInt(item.dataset.idx, 10);
+    const m = ALL_PINS[idx];
     if (!m) return;
-    layerVisible[lid] = true;
-    const prow = document.querySelector('#pin-layers .layer-row[data-layer="' + lid + '"]');
+    layerVisible['all'] = true;
+    const prow = document.querySelector('#pin-layers .layer-row[data-layer="all"]');
     if (prow) prow.classList.remove('off');
-    renderPinLayers();
-    flyTo(m.lon, m.lat, 15, () => showPinPopup(m, L));
+    renderAllPins();
+    flyTo(m.lon, m.lat, 15, () => showPinPopup(m));
   }
 }
 
