@@ -109,10 +109,10 @@
 
   #popup {
     position: absolute; z-index: 7; display: none;
-    min-width: 150px; max-width: 260px;
-    background: var(--panel); border-radius: 12px;
+    min-width: 160px; max-width: 280px;
+    background: var(--panel); border-radius: 14px;
     box-shadow: var(--shadow);
-    padding: 10px 12px;
+    padding: 12px 14px;
     transform: translate(-50%, -100%);
     pointer-events: none;
   }
@@ -122,7 +122,7 @@
     transform: translateX(-50%) rotate(45deg);
     border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
   }
-  #popup .p-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  #popup .p-title { font-size: 15px; font-weight: 800; margin-bottom: 5px; line-height: 1.4; }
   #popup .p-meta { font-size: 12px; color: var(--ink-2); line-height: 1.6; }
   #popup .p-addr { color: var(--ink-2); }
   #popup .p-remark { color: #8a4a1e; background: #fdf3e7; border-radius: 8px; padding: 6px 8px; margin-top: 5px; line-height: 1.55; }
@@ -134,9 +134,9 @@
 
   #popup .p-nav-row { margin-top: 8px; text-align: right; pointer-events: auto; }
   #popup .p-nav {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: var(--brand); color: #fff; border: 0; border-radius: 8px;
-    padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    width: 100%; background: var(--brand); color: #fff; border: 0; border-radius: 9px;
+    padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
     text-decoration: none; -webkit-tap-highlight-color: transparent;
   }
   #popup .p-nav:hover { opacity: .88; }
@@ -174,6 +174,15 @@
     background: linear-gradient(140deg, #2f8fe0, #1a5fb4);
     padding: 2px 8px; border-radius: 20px;
   }
+  .panel-head { position: relative; }
+  .panel-head .close-btn {
+    position: absolute; top: 12px; right: 12px;
+    width: 32px; height: 32px; border-radius: 10px;
+    border: 1px solid var(--line); background: #f7f9fc; color: var(--ink-2);
+    display: none; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 17px; line-height: 1; padding: 0;
+  }
+  .panel-head .close-btn:active { background: #eef1f5; }
 
   .search-wrap { position: relative; margin: 12px 18px 4px; }
   .search-box {
@@ -314,6 +323,13 @@
     font-family: Consolas, "Courier New", monospace; font-size: 10px;
   }
 
+  #panel-mask {
+    position: fixed; inset: 0; z-index: 7;
+    background: rgba(17, 24, 39, .35); backdrop-filter: blur(1px);
+    display: none;
+  }
+  #panel-mask.show { display: block; }
+
   #panel-toggle {
     position: absolute; top: 14px; left: 14px; z-index: 9;
     width: 44px; height: 44px; border-radius: 12px;
@@ -355,8 +371,11 @@
     }
     #panel.open { transform: translateX(0); }
     #panel-toggle { display: flex; }
+    .panel-head .close-btn { display: flex; }
     .map-ctrl { right: 12px; }
-    #popup { max-width: 200px; }
+    .map-ctrl .btn { width: 46px; height: 46px; border-radius: 14px; }
+    .search-box input { font-size: 16px; }
+    #popup { max-width: 240px; }
     #offline-banner { top: 70px; }
   }
 </style>
@@ -381,6 +400,8 @@
 
   <button id="panel-toggle" aria-label="打开面板"><svg class="svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
 
+  <div id="panel-mask"></div>
+
   <aside id="panel">
     <div class="panel-head">
       <div class="brand">
@@ -399,6 +420,7 @@
           <span class="badge">在线版</span>
         </div>
       </div>
+      <button class="close-btn" id="btn-panel-close" aria-label="关闭面板" title="关闭">×</button>
     </div>
 
     <div class="search-wrap">
@@ -647,6 +669,7 @@ function makePinEl(m) {
   num.setAttribute('font-weight', '800');
   num.setAttribute('font-family', '"QDFont", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif');
   num.setAttribute('fill', '#ffffff');
+  num.setAttribute('style', 'paint-order: stroke');
   num.textContent = m.n;
   el.appendChild(num);
   el.addEventListener('click', e => { e.stopPropagation(); showPinPopup(m, el); });
@@ -976,6 +999,12 @@ function showPopupAt(lon, lat, title, metaHtml) {
   popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><a class="p-nav" target="_blank" rel="noopener" href="' + navHref(lon, lat, title) + '"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</a></div>';
   popupEl.querySelector('.p-title').textContent = title;
   popupEl.querySelector('.p-meta').innerHTML = metaHtml || '';
+  const navA = popupEl.querySelector('.p-nav');
+  if (navA) navA.addEventListener('click', e => {
+    e.preventDefault();
+    const w = window.open(navA.href, '_blank');
+    if (!w) location.href = navA.href;
+  });
   popupEl.style.left = sx + 'px';
   popupEl.style.top = (sy - 10) + 'px';
   popupEl.style.display = 'block';
@@ -1321,8 +1350,16 @@ function toggleLine(ref) {
 
 /* ---------- mobile panel ---------- */
 const panelEl = document.getElementById('panel');
-document.getElementById('panel-toggle').addEventListener('click', () => panelEl.classList.toggle('open'));
-document.getElementById('btn-locate').addEventListener('click', () => panelEl.classList.remove('open'));
+const panelMask = document.getElementById('panel-mask');
+function setPanel(open) {
+  panelEl.classList.toggle('open', open);
+  if (panelMask) panelMask.classList.toggle('show', open);
+}
+document.getElementById('panel-toggle').addEventListener('click', () => setPanel(!panelEl.classList.contains('open')));
+const panelClose = document.getElementById('btn-panel-close');
+if (panelClose) panelClose.addEventListener('click', () => setPanel(false));
+if (panelMask) panelMask.addEventListener('click', () => setPanel(false));
+document.getElementById('btn-locate').addEventListener('click', () => setPanel(false));
 
 /* ---------- toast ---------- */
 let toastTimer = null;
