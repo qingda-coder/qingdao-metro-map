@@ -132,6 +132,15 @@
     border-radius: 20px; color: #fff; font-size: 11px; font-weight: 700;
   }
 
+  #popup .p-nav-row { margin-top: 8px; text-align: right; pointer-events: auto; }
+  #popup .p-nav {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--brand); color: #fff; border: 0; border-radius: 8px;
+    padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  #popup .p-nav:hover { opacity: .88; }
+  #popup .p-nav svg { width: 13px; height: 13px; fill: currentColor; }
+
   /* ============ panel ============ */
   #panel {
     position: absolute; top: 14px; left: 14px; z-index: 8;
@@ -946,14 +955,22 @@ function renderOverlay() {
 }
 
 /* ---------- popup ---------- */
+/* ---------- 导航跳转（高德 uri，数据已对齐 GCJ-02） ---------- */
+const NAV_DATA_GCJ = true;
+function openNav(lon, lat, name) {
+  const url = 'https://uri.amap.com/navigation?to=' + lon.toFixed(6) + ',' + lat.toFixed(6) + ',' + encodeURIComponent(name) + '&coordinate=gaode&callnative=0';
+  window.open(url, '_blank', 'noopener');
+}
+
 function showPopupAt(lon, lat, title, metaHtml) {
   const [cx, cy] = lonLatToWorld(state.lon, state.lat, state.zoom);
   const [wx, wy] = lonLatToWorld(lon, lat, state.zoom);
   const sx = wx - cx + mapEl.clientWidth / 2;
   const sy = wy - cy + mapEl.clientHeight / 2;
-  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div>';
+  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><button type="button" class="p-nav"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</button></div>';
   popupEl.querySelector('.p-title').textContent = title;
   popupEl.querySelector('.p-meta').innerHTML = metaHtml || '';
+  popupEl.querySelector('.p-nav').addEventListener('click', e => { e.stopPropagation(); openNav(lon, lat, title); });
   popupEl.style.left = sx + 'px';
   popupEl.style.top = (sy - 10) + 'px';
   popupEl.style.display = 'block';
