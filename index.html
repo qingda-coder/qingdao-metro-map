@@ -996,14 +996,13 @@ function showPopupAt(lon, lat, title, metaHtml) {
   const [wx, wy] = lonLatToWorld(lon, lat, state.zoom);
   const sx = wx - cx + mapEl.clientWidth / 2;
   const sy = wy - cy + mapEl.clientHeight / 2;
-  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><a class="p-nav" target="_blank" rel="noopener" href="' + navHref(lon, lat, title) + '"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</a></div>';
+  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><a class="p-nav" href="' + navHref(lon, lat, title) + '"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</a></div>';
   popupEl.querySelector('.p-title').textContent = title;
   popupEl.querySelector('.p-meta').innerHTML = metaHtml || '';
   const navA = popupEl.querySelector('.p-nav');
   if (navA) navA.addEventListener('click', e => {
-    e.preventDefault();
     const w = window.open(navA.href, '_blank');
-    if (!w) location.href = navA.href;
+    if (w) e.preventDefault();
   });
   popupEl.style.left = sx + 'px';
   popupEl.style.top = (sy - 10) + 'px';
