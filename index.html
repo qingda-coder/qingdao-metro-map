@@ -137,6 +137,7 @@
     display: inline-flex; align-items: center; gap: 4px;
     background: var(--brand); color: #fff; border: 0; border-radius: 8px;
     padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+    text-decoration: none; -webkit-tap-highlight-color: transparent;
   }
   #popup .p-nav:hover { opacity: .88; }
   #popup .p-nav svg { width: 13px; height: 13px; fill: currentColor; }
@@ -485,7 +486,10 @@ function wgs84ToGcj02(lng, lat) {
 }
 // 数据坐标从 WGS-84 对齐到 GCJ-02（我的图钉由用户点底图产生，本身已是 GCJ-02，不转换）
 (function alignToGCJ() {
-  METRO.lines.forEach(l => l.stations.forEach(s => { const p = wgs84ToGcj02(s.lon, s.lat); s.lon = p[0]; s.lat = p[1]; }));
+  METRO.lines.forEach(l => {
+    l.stations.forEach(s => { const p = wgs84ToGcj02(s.lon, s.lat); s.lon = p[0]; s.lat = p[1]; });
+    if (Array.isArray(l.geom)) l.geom = l.geom.map(p => { const c = wgs84ToGcj02(p[1], p[0]); return [c[1], c[0]]; });
+  });
   POIS.forEach(p => { const c = wgs84ToGcj02(p.lon, p.lat); p.lon = c[0]; p.lat = c[1]; });
   CUSTOM.forEach(m => { const c = wgs84ToGcj02(m.lon, m.lat); m.lon = c[0]; m.lat = c[1]; });
   BADMINTON.forEach(m => { const c = wgs84ToGcj02(m.lon, m.lat); m.lon = c[0]; m.lat = c[1]; });
@@ -957,11 +961,11 @@ function renderOverlay() {
 }
 
 /* ---------- popup ---------- */
-/* ---------- 导航跳转（高德 uri，数据已对齐 GCJ-02） ---------- */
+/* ---------- 导航跳转（高德 uri，数据已对齐 GCJ-02；用真实链接（target=_blank），
+   避免 window.open 在微信内置浏览器被拦截导致跳转无效） ---------- */
 const NAV_DATA_GCJ = true;
-function openNav(lon, lat, name) {
-  const url = 'https://uri.amap.com/navigation?to=' + lon.toFixed(6) + ',' + lat.toFixed(6) + ',' + encodeURIComponent(name) + '&coordinate=gaode&callnative=0';
-  window.open(url, '_blank', 'noopener');
+function navHref(lon, lat, name) {
+  return 'https://uri.amap.com/navigation?to=' + lon.toFixed(6) + ',' + lat.toFixed(6) + ',' + encodeURIComponent(name) + '&coordinate=gaode&callnative=0';
 }
 
 function showPopupAt(lon, lat, title, metaHtml) {
@@ -969,10 +973,9 @@ function showPopupAt(lon, lat, title, metaHtml) {
   const [wx, wy] = lonLatToWorld(lon, lat, state.zoom);
   const sx = wx - cx + mapEl.clientWidth / 2;
   const sy = wy - cy + mapEl.clientHeight / 2;
-  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><button type="button" class="p-nav"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</button></div>';
+  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><a class="p-nav" target="_blank" rel="noopener" href="' + navHref(lon, lat, title) + '"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</a></div>';
   popupEl.querySelector('.p-title').textContent = title;
   popupEl.querySelector('.p-meta').innerHTML = metaHtml || '';
-  popupEl.querySelector('.p-nav').addEventListener('click', e => { e.stopPropagation(); openNav(lon, lat, title); });
   popupEl.style.left = sx + 'px';
   popupEl.style.top = (sy - 10) + 'px';
   popupEl.style.display = 'block';
