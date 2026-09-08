@@ -135,21 +135,6 @@
     border-radius: 20px; color: #fff; font-size: 11px; font-weight: 700;
   }
 
-  #popup .p-nav-row { margin-top: 8px; display: flex; gap: 8px; pointer-events: auto; }
-  #popup .p-nav-copy {
-    flex: 1; background: #eef1f5; color: var(--ink-2); border: 0; border-radius: 9px;
-    padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
-  }
-  #popup .p-nav-copy:active { background: #e3e8ee; }
-  #popup .p-nav {
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    width: 100%; background: var(--brand); color: #fff; border: 0; border-radius: 9px;
-    padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
-    text-decoration: none; -webkit-tap-highlight-color: transparent;
-  }
-  #popup .p-nav:hover { opacity: .88; }
-  #popup .p-nav svg { width: 13px; height: 13px; fill: currentColor; }
-
   /* ============ panel ============ */
   #panel {
     position: absolute; top: 14px; left: 14px; z-index: 8;
@@ -992,44 +977,15 @@ function renderOverlay() {
 }
 
 /* ---------- popup ---------- */
-/* ---------- 导航跳转（高德 uri，数据已对齐 GCJ-02；用真实链接（target=_blank），
-   避免 window.open 在微信内置浏览器被拦截导致跳转无效） ---------- */
-const NAV_DATA_GCJ = true;
-function navHref(lon, lat, name) {
-  return 'https://uri.amap.com/navigation?to=' + lon.toFixed(6) + ',' + lat.toFixed(6) + ',' + encodeURIComponent(name) + '&coordinate=gaode&callnative=0';
-}
-
 function showPopupAt(lon, lat, title, metaHtml) {
   const [cx, cy] = lonLatToWorld(state.lon, state.lat, state.zoom);
   const [wx, wy] = lonLatToWorld(lon, lat, state.zoom);
   const sx = wx - cx + mapEl.clientWidth / 2;
   const sy = wy - cy + mapEl.clientHeight / 2;
-  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div><div class="p-nav-row"><a class="p-nav" href="' + navHref(lon, lat, title) + '"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>去这里</a><button type="button" class="p-nav-copy" id="p-nav-copy">复制链接</button></div>';
+  popupEl.innerHTML = '<div class="p-title"></div><div class="p-meta"></div>';
   popupEl.querySelector('.p-title').textContent = title;
   popupEl.querySelector('.p-meta').innerHTML = metaHtml || '';
-  const navA = popupEl.querySelector('.p-nav');
-  if (navA) navA.addEventListener('click', e => {
-    toast('正在打开高德导航…');
-    const w = window.open(navA.href, '_blank');
-    if (w) e.preventDefault();
-  });
-  const navCopy = popupEl.querySelector('#p-nav-copy');
-  if (navCopy) navCopy.addEventListener('click', e => {
-    e.stopPropagation();
-    const url = navHref(lon, lat, title);
-    const done = function() { toast('导航链接已复制，可粘贴到浏览器打开'); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(done, function() { fallbackCopy(url); done(); });
-    } else { fallbackCopy(url); done(); }
-  });
   popupEl.style.left = sx + 'px';
-  function fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); } catch (e2) {}
-    document.body.removeChild(ta);
-  }
   popupEl.style.top = (sy - 10) + 'px';
   popupEl.style.display = 'block';
 }
